@@ -1,88 +1,84 @@
-import { signal } from '@preact/signals'
+import { useQuery } from '@tanstack/react-query'
 import * as d3 from 'd3'
-import { authState, login } from '../../auth'
-
-// import "./style.css";
-
-const timelineData = signal([
-  { x: 0, y: 10 },
-  { x: 10, y: 40 },
-  { x: 20, y: 30 },
-  { x: 30, y: 70 },
-  { x: 40, y: 0 },
-])
+import { fetchHeartRate } from '../../state/api'
 
 export const Timeline = () => {
-  const { auth } = authState()
+  const now = new Date()
+  const lastDay = new Date(now.getTime() - 24 * 60 * 60 * 1000) // Start fetching 1 day ago
 
-  const onSubmit = async (e) => {
-    e.preventDefault()
-    const formData = new FormData(e.currentTarget)
-    const target = e.currentTarget
-    await login(formData.get('user'), formData.get('pass'))
-    target.reset() // Clear the inputs to prepare for the next submission
+  // Use TanStack Query to fetch heart rate data
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['heartRate', 'lastDay'],
+    queryFn: () => fetchHeartRate(lastDay, now), // Fetch data with the API function
+    staleTime: 10 * 60 * 1000, // Cache data for 10 minutes
+    // cacheTime: 60 * 60 * 1000, // Keep unused data in cache for 1 hour
+  })
+
+  if (isLoading) {
+    return <div>Loading Heart Rate...</div>
   }
 
-  const userInfo = auth.value.user ? (
-    <p>User: {auth.value.user}</p>
-  ) : (
-    <form onSubmit={onSubmit}>
-      <input name="user" />
-      <input type="password" name="pass" />
-      <button>Login</button>
-    </form>
-  )
-  return (
-    <div>
-      {userInfo}
-      <div class="timeline">
-        <h1>Time Line</h1>
+  if (isError) {
+    return <div>Error: {(error as Error).message}</div>
+  }
 
-        <LineChart data={timelineData} />
+  return (
+    <>
+      <div class="timeline">
+        <h1>Heart Rate Timeline</h1>
+        <LineChart data={data || []} />
       </div>
-    </div>
+    </>
   )
 }
 
 function Resource(props) {
   return (
     <a href={props.href} target="_blank" class="resource">
-      <h2>{props.title}</h2>
-      <p>{props.description}</p>
+      <h2>{props.title} </h2>
+      <p> {props.description} </p>
     </a>
   )
 }
 
-function LineChart({ data: { v: data } }) {
+function LineChart({ data }: { data: [Date, number][] }) {
   const margin = { top: 10, right: 20, bottom: 20, left: 30 }
-  const width = 500
-  const height = 300
-
-  console.log('vvvv', data.v)
+  const width = 800
+  const height = 400
 
   const x = d3
-    .scaleLinear()
-    .domain([0, d3.max(data, (d) => d.x)])
+    .scaleTime()
+    .domain(d3.extent(data, (d) => new Date(d[0])) as [Date, Date])
     .range([margin.left, width - margin.right])
 
   const y = d3
     .scaleLinear()
-    .domain([0, d3.max(data, (d) => d.y)])
+    .domain([0, d3.max(data, (d) => d[1])] as [number, number])
     .range([height - margin.bottom, margin.top])
 
   return (
     <svg width={width} height={height}>
       <path
         fill="none"
-        stroke="#33C7FF"
-        stroke-width="2"
+        stroke="red"
+        strokeWidth="2"
         d={d3
-          .line()
-          .x((d) => x(d.x))
-          .y((d) => y(d.y))(data)}
+          .line<[Date, number]>()
+          .x((d) => x(new Date(d[0])))
+          .y((d) => y(d[1]))(data)}
       />
-      <g transform="translate(${margin.left},0)" ref={(g) => d3.select(g).call(d3.axisLeft(y))} />
-      <g transform="translate(0,{height - margin.bottom})" ref={(g) => d3.select(g).call(d3.axisBottom(x))} />
+      <g
+        transform={`translate(${margin.left},0)`}
+        ref={(g) => {
+          if (g) d3.select(g).call(d3.axisLeft(x))
+        }}
+      />
+      <g
+        transform={`translate(0,${height - margin.bottom})`}
+        ref={(g) => {
+          if (g) d3.select(g).call(d3.axisBottom(x))
+        }}
+      />
     </svg>
   )
 }
