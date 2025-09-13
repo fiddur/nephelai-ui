@@ -4,7 +4,7 @@ import { auth } from './auth'
 // Fetch heart rate data for the specified date range
 export const fetchHeartRate = async (start: Date, end: Date): Promise<[Date, number][]> => {
   const { token } = auth.value
-  const response = await axios.get<[Date, number][]>('http://valhall/api/v2/heartrate', {
+  const response = await axios.get<[string, number][]>('http://valhall/api/v2/heartrate', {
     headers: { Authorization: `Bearer ${token}` },
     params: {
       start: start.toISOString(),
@@ -12,5 +12,5 @@ export const fetchHeartRate = async (start: Date, end: Date): Promise<[Date, num
     },
   })
 
-  return response.data
+  return response.data.map(([time, rate]) => [new Date(time), rate])
 }

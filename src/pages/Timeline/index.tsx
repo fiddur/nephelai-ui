@@ -1,31 +1,45 @@
+import { signal } from '@preact/signals'
 import { useQuery } from '@tanstack/react-query'
 import * as d3 from 'd3'
+import { endOfDay, formatISO, startOfDay, subDays } from 'date-fns'
 import { fetchHeartRate } from '../../state/api'
 
-export const Timeline = () => {
-  const now = new Date()
-  const lastDay = new Date(now.getTime() - 24 * 60 * 60 * 1000) // Start fetching 1 day ago
+// Signals to handle user-selected dates
+const fromDate = signal(formatISO(subDays(new Date(), 7), { representation: 'date' }))
+const toDate = signal(formatISO(new Date(), { representation: 'date' }))
 
+export const Timeline = () => {
   // Use TanStack Query to fetch heart rate data
-  const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['heartRate', 'lastDay'],
-    queryFn: () => fetchHeartRate(lastDay, now), // Fetch data with the API function
-    staleTime: 10 * 60 * 1000, // Cache data for 10 minutes
-    // cacheTime: 60 * 60 * 1000, // Keep unused data in cache for 1 hour
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['heartRate', fromDate.value, toDate.value],
+    queryFn: () =>
+      fetchHeartRate(startOfDay(new Date(fromDate.value)), endOfDay(new Date(toDate.value))),
+    staleTime: 10 * 60 * 1000,
   })
 
-  if (isLoading) {
-    return <div>Loading Heart Rate...</div>
+  const handleDateChange = (e: Event) => {
+    const target = e.target as HTMLInputElement
+    if (target.name === 'from') fromDate.value = target.value
+    else if (target.name === 'to') toDate.value = target.value
+    refetch()
   }
 
-  if (isError) {
-    return <div>Error: {(error as Error).message}</div>
-  }
+  if (isLoading) return <div>Loading Heart Rate...</div>
+  if (isError) return <div>Error: {(error as Error).message}</div>
 
   return (
     <>
       <div class="timeline">
         <h1>Heart Rate Timeline</h1>
+        <div>
+          <label>
+            From:{' '}
+            <input type="date" name="from" value={fromDate.value} onChange={handleDateChange} />
+          </label>
+          <label>
+            To: <input type="date" name="to" value={toDate.value} onChange={handleDateChange} />
+          </label>
+        </div>
         <LineChart data={data || []} />
       </div>
     </>
@@ -48,12 +62,12 @@ function LineChart({ data }: { data: [Date, number][] }) {
 
   const x = d3
     .scaleTime()
-    .domain(d3.extent(data, (d) => new Date(d[0])) as [Date, Date])
+    .domain(d3.extent(data, ([time]) => time) as [Date, Date])
     .range([margin.left, width - margin.right])
 
   const y = d3
     .scaleLinear()
-    .domain([0, d3.max(data, (d) => d[1])] as [number, number])
+    .domain([40, d3.max(data, ([, rate]) => rate)] as [number, number])
     .range([height - margin.bottom, margin.top])
 
   return (
@@ -64,13 +78,13 @@ function LineChart({ data }: { data: [Date, number][] }) {
         strokeWidth="2"
         d={d3
           .line<[Date, number]>()
-          .x((d) => x(new Date(d[0])))
-          .y((d) => y(d[1]))(data)}
+          .x(([time]) => x(time))
+          .y(([, rate]) => y(rate))(data)}
       />
       <g
         transform={`translate(${margin.left},0)`}
         ref={(g) => {
-          if (g) d3.select(g).call(d3.axisLeft(x))
+          if (g) d3.select(g).call(d3.axisLeft(y))
         }}
       />
       <g

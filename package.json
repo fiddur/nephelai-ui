@@ -14,6 +14,7 @@
     "@tanstack/react-query-devtools": "^5.87.4",
     "axios": "^1.11.0",
     "d3": "^7.9.0",
+    "date-fns": "^4.1.0",
     "preact": "^10.26.9",
     "preact-iso": "^2.10.0"
   },
@@ -36,7 +37,7 @@
     "plugins": [
       "prettier-plugin-organize-imports"
     ],
-    "printWidth": 110,
+    "printWidth": 100,
     "semi": false,
     "singleQuote": true,
     "tabWidth": 2,
