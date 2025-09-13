@@ -5,7 +5,7 @@ import { endOfDay, formatISO, startOfDay, subDays } from 'date-fns'
 import { fetchHeartRate } from '../../state/api'
 
 // Signals to handle user-selected dates
-const fromDate = signal(formatISO(subDays(new Date(), 7), { representation: 'date' }))
+const fromDate = signal(formatISO(subDays(new Date(), 1), { representation: 'date' }))
 const toDate = signal(formatISO(new Date(), { representation: 'date' }))
 
 export const Timeline = () => {
@@ -46,15 +46,6 @@ export const Timeline = () => {
   )
 }
 
-function Resource(props) {
-  return (
-    <a href={props.href} target="_blank" class="resource">
-      <h2>{props.title} </h2>
-      <p> {props.description} </p>
-    </a>
-  )
-}
-
 function LineChart({ data }: { data: [Date, number][] }) {
   const margin = { top: 10, right: 20, bottom: 20, left: 30 }
   const width = 800
@@ -77,9 +68,10 @@ function LineChart({ data }: { data: [Date, number][] }) {
         stroke="red"
         strokeWidth="2"
         d={d3
-          .line<[Date, number]>()
+          .line<[Date, number] | null>()
+          .defined(Boolean)
           .x(([time]) => x(time))
-          .y(([, rate]) => y(rate))(data)}
+          .y(([, rate]) => y(rate))(preprocessData(data, 10))}
       />
       <g
         transform={`translate(${margin.left},0)`}
@@ -95,4 +87,17 @@ function LineChart({ data }: { data: [Date, number][] }) {
       />
     </svg>
   )
+}
+
+const preprocessData = (
+  data: [Date, number][],
+  gapThresholdMinutes: number,
+): ([Date, number] | null)[] => {
+  const thresholdMs = gapThresholdMinutes * 60 * 1000
+  return data.reduce<[Date, number][]>((acc, curr) => {
+    const last = acc.at(-1)
+    return last && curr[0].getTime() - last[0].getTime() > thresholdMs
+      ? [...acc, null, curr]
+      : [...acc, curr]
+  }, [])
 }
